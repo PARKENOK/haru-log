@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 블로그 주인 계정만 쓰기 가능. src/lib/firebase.ts의 OWNER_EMAIL과 같은 값이어야 해요.
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email == 'dpshr2000@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasOnly(['title', 'content', 'recordedAt', 'authorEmail', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 100
+        && data.content is string && data.content.size() <= 20000
+        && data.recordedAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isOwner()
+        && isValidPost(request.resource.data)
+        && request.resource.data.authorEmail == request.auth.token.email;
+      allow update: if isOwner()
+        && isValidPost(request.resource.data)
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

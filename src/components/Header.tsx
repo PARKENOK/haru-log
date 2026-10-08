@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "./AuthProvider";
 
 const NAV = [
   { href: "/", label: "타임라인" },
@@ -11,6 +12,7 @@ const NAV = [
 
 export default function Header() {
   const pathname = usePathname();
+  const { isOwner, signOut } = useAuth();
 
   return (
     <header className="border-b border-line bg-card/80 backdrop-blur">
@@ -33,12 +35,19 @@ export default function Header() {
               </Link>
             );
           })}
-          <Link
-            href="/write"
-            className="ml-2 rounded-full bg-accent px-3 py-1.5 text-white hover:opacity-90"
-          >
-            ✏️ 기록하기
-          </Link>
+          {isOwner && (
+            <>
+              <Link
+                href="/write"
+                className="ml-2 rounded-full bg-accent px-3 py-1.5 text-white hover:opacity-90"
+              >
+                ✏️ 기록하기
+              </Link>
+              <button onClick={signOut} className="px-2 py-1.5 text-ink-soft hover:text-ink">
+                로그아웃
+              </button>
+            </>
+          )}
         </nav>
       </div>
     </header>
