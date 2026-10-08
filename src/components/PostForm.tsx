@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPost, updatePost, type Post } from "@/lib/posts";
-import { toDateTimeLocal } from "@/lib/format";
+import { formatDate, formatTime, toDateTimeLocal } from "@/lib/format";
 import { MOODS, parseTags, WEATHERS, type Weather } from "@/lib/meta";
+import AiDraft from "./AiDraft";
 
 export default function PostForm({ post }: { post?: Post }) {
   const router = useRouter();
@@ -138,6 +139,20 @@ export default function PostForm({ post }: { post?: Post }) {
           className="mt-1 block w-full resize-y rounded-lg border border-line bg-paper px-3 py-2 leading-8"
         />
       </label>
+      <AiDraft
+        input={{
+          memo: content,
+          title: title.trim(),
+          recordedAt: recordedAt
+            ? `${formatDate(new Date(recordedAt))} ${formatTime(new Date(recordedAt))}`
+            : "",
+          mood,
+          weather: weather ? WEATHERS[weather].label : "",
+          place: place.trim(),
+          tags: parseTags(tagText),
+        }}
+        onApply={setContent}
+      />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
         <button

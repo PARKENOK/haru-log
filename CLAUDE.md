@@ -27,6 +27,16 @@
 - `src/lib/meta.ts` — 기분 이모지, 날씨 종류, 태그 파싱
 - `src/components/` — 화면 컴포넌트. 데이터는 모두 브라우저(클라이언트)에서 Firestore로 직접 읽어요.
 - `firestore.rules` — 읽기는 누구나, 쓰기는 주인 이메일만, 필드 검증
+- `src/app/api/draft/route.ts` — AI 글 완성 API. 주인 확인(`src/lib/verify-owner.ts`, Firebase ID 토큰 검증) 후 `src/lib/draft.ts`가 OpenRouter를 호출해요.
+- `src/components/AiDraft.tsx` — 글쓰기 화면의 "✨ AI로 글 완성하기" 버튼과 미리보기
+
+## AI 글쓰기 (OpenRouter)
+
+- 키: Vercel 환경변수 `OPENROUTER_API_KEY` (사용자가 Production에만 직접 등록, 값은 대화에 남기지 않음). Anthropic 키가 아니라 OpenRouter 키예요.
+- 모델: 기본 `anthropic/claude-opus-5.5`. Vercel 환경변수 `OPENROUTER_MODEL`을 추가하면 바꿀 수 있어요.
+- 키가 Production에만 있어서 Preview 배포와 로컬에서는 AI 기능이 동작하지 않아요. 로컬에서 쓰려면 `.env.local`에 `OPENROUTER_API_KEY=...`를 직접 추가해요.
+- 요금이 나가는 기능이라 API는 주인 로그인 토큰이 없으면 401로 거절해요.
+- 프롬프트(말투, 분량)는 `src/lib/draft.ts`의 `SYSTEM_PROMPT`에서 고쳐요.
 
 ## 바꿀 때 주의할 점
 
