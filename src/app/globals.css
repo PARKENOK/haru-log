@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f6efe3;
+  --card: #fffaf2;
+  --ink: #4a3f35;
+  --ink-soft: #8a7b6b;
+  --line: #e6d8c3;
+  --accent: #c47f56;
+  --accent-soft: #f1dccb;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-body);
+  --font-hand: var(--font-hand);
+}
+
+body {
+  background-color: var(--paper);
+  /* 은은한 종이 줄무늬 */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    rgba(196, 127, 86, 0.06) 31px,
+    rgba(196, 127, 86, 0.06) 32px
+  );
+  color: var(--ink);
+}
