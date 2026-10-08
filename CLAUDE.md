@@ -36,6 +36,7 @@
 - 모델: 기본 `anthropic/claude-opus-5.5`. Vercel 환경변수 `OPENROUTER_MODEL`을 추가하면 바꿀 수 있어요.
 - 키가 Production에만 있어서 Preview 배포와 로컬에서는 AI 기능이 동작하지 않아요. 로컬에서 쓰려면 `.env.local`에 `OPENROUTER_API_KEY=...`를 직접 추가해요.
 - 요금이 나가는 기능이라 API는 주인 로그인 토큰이 없으면 401로 거절해요.
+- 토큰 검증은 `jose`로 직접 해요. `firebase-admin`은 Vercel에서 `ERR_REQUIRE_ESM`(jwks-rsa → jose) 오류로 로드되지 않아서 뺐어요.
 - 프롬프트(말투, 분량)는 `src/lib/draft.ts`의 `SYSTEM_PROMPT`에서 고쳐요.
 
 ## 바꿀 때 주의할 점
