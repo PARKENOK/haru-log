@@ -2,7 +2,7 @@ import type { DraftInput } from "./draft-input";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Vercel 환경변수 OPENROUTER_MODEL로 바꿀 수 있어요. (모델 목록: https://openrouter.ai/models)
-const DEFAULT_MODEL = "anthropic/claude-opus-5.5";
+const DEFAULT_MODEL = "anthropic/claude-sonnet-5.5";
 
 const SYSTEM_PROMPT = `너는 개인 일상 블로그 "하루기록"의 글쓰기 도우미야.
 사용자가 남긴 짧은 메모를 바탕으로, 그 사람이 직접 쓴 것 같은 1인칭 일상 블로그 본문을 한국어로 써 줘.
