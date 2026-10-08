@@ -10,10 +10,18 @@ service cloud.firestore {
     }
 
     function isValidPost(data) {
-      return data.keys().hasOnly(['title', 'content', 'recordedAt', 'authorEmail', 'createdAt', 'updatedAt'])
+      return data.keys().hasOnly([
+          'title', 'content', 'recordedAt', 'mood', 'weather', 'place', 'tags',
+          'authorEmail', 'createdAt', 'updatedAt'
+        ])
         && data.title is string && data.title.size() > 0 && data.title.size() <= 100
         && data.content is string && data.content.size() <= 20000
         && data.recordedAt is timestamp
+        // 기분·날씨·장소·태그는 3단계에서 추가돼서, 없는 기록도 허용해요.
+        && data.get('mood', '') is string && data.get('mood', '').size() <= 16
+        && data.get('weather', '') in ['', 'sunny', 'partly', 'cloudy', 'rain', 'snow']
+        && data.get('place', '') is string && data.get('place', '').size() <= 100
+        && data.get('tags', []) is list && data.get('tags', []).size() <= 10
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }

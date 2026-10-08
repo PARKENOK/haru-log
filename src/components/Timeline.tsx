@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listPosts, type Post } from "@/lib/posts";
-import { formatDate, formatTime } from "@/lib/format";
 import EmptyState from "./EmptyState";
+import PostList from "./PostList";
 
 export default function Timeline() {
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -29,26 +28,5 @@ export default function Timeline() {
     );
   }
 
-  return (
-    <ol className="space-y-4">
-      {posts.map((post) => (
-        <li key={post.id}>
-          <Link
-            href={`/posts/${post.id}`}
-            className="block rounded-2xl border border-line bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <p className="text-xs text-ink-soft">
-              {formatDate(post.recordedAt)} · {formatTime(post.recordedAt)}
-            </p>
-            <h2 className="mt-1 font-hand text-3xl">{post.title}</h2>
-            {post.content && (
-              <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-7 text-ink/80">
-                {post.content}
-              </p>
-            )}
-          </Link>
-        </li>
-      ))}
-    </ol>
-  );
+  return <PostList posts={posts} />;
 }

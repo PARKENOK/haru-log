@@ -4,9 +4,9 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { deletePost, getPost, type Post } from "@/lib/posts";
-import { formatDate, formatTime } from "@/lib/format";
 import { useAuth } from "./AuthProvider";
 import EmptyState from "./EmptyState";
+import { PostMeta, TagList } from "./PostMeta";
 
 export default function PostDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -50,11 +50,14 @@ export default function PostDetail({ params }: { params: Promise<{ id: string }>
 
   return (
     <article className="rounded-2xl border border-line bg-card p-6 shadow-sm sm:p-8">
-      <p className="text-sm text-ink-soft">
-        {formatDate(post.recordedAt)} · {formatTime(post.recordedAt)}
-      </p>
+      <PostMeta post={post} className="text-sm" />
       <h1 className="mt-1 font-hand text-4xl">{post.title}</h1>
       <div className="mt-6 whitespace-pre-line leading-8">{post.content}</div>
+      {post.tags.length > 0 && (
+        <div className="mt-6">
+          <TagList tags={post.tags} linked />
+        </div>
+      )}
 
       <div className="mt-8 flex items-center justify-between border-t border-line pt-4 text-sm">
         <Link href="/" className="text-ink-soft hover:text-ink">
