@@ -20,7 +20,7 @@ const hand = Nanum_Pen_Script({
 
 export const metadata: Metadata = {
   title: "하루기록",
-  description: "사진, 시간, 글로 남기는 나의 일상 블로그",
+  description: "시간, 글, 기분, 날씨를 함께 남기는 나의 일상 블로그",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

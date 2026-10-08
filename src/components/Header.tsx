@@ -7,7 +7,6 @@ import { useAuth } from "./AuthProvider";
 const NAV = [
   { href: "/", label: "타임라인" },
   { href: "/calendar", label: "캘린더" },
-  { href: "/gallery", label: "갤러리" },
 ];
 
 export default function Header() {
@@ -16,11 +15,11 @@ export default function Header() {
 
   return (
     <header className="border-b border-line bg-card/80 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="font-hand text-3xl text-accent">
           하루기록
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex flex-wrap items-center gap-1 text-sm">
           {NAV.map(({ href, label }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (

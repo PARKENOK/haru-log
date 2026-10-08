@@ -64,6 +64,19 @@ export async function listPosts(): Promise<Post[]> {
   return snap.docs.map(toPost);
 }
 
+/** start 이상 end 미만에 기록된 글 (오래된 순) */
+export async function listPostsBetween(start: Date, end: Date): Promise<Post[]> {
+  const snap = await getDocs(
+    query(
+      posts,
+      where("recordedAt", ">=", Timestamp.fromDate(start)),
+      where("recordedAt", "<", Timestamp.fromDate(end)),
+      orderBy("recordedAt"),
+    ),
+  );
+  return snap.docs.map(toPost);
+}
+
 export async function listPostsByTag(tag: string): Promise<Post[]> {
   // array-contains와 정렬을 함께 쓰면 복합 색인이 필요해서, 정렬은 여기서 해요.
   const snap = await getDocs(query(posts, where("tags", "array-contains", tag)));
