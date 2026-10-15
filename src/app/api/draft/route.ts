@@ -1,5 +1,5 @@
-import { DraftError, writeDraft } from "@/lib/draft";
-import { MAX_MEMO_LENGTH, MAX_PARAGRAPHS, type DraftInput } from "@/lib/draft-input";
+import { DraftError, reviewDraft, reviseDraft, validIssues, writeDraft } from "@/lib/draft";
+import { MAX_MEMO_LENGTH, MAX_PARAGRAPHS, splitParagraphs, type DraftInput } from "@/lib/draft-input";
 import { isOwnerRequest } from "@/lib/verify-owner";
 
 // 글 생성이 수십 초 걸릴 수 있어요.
@@ -23,8 +23,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // 평가자-최적화자: 초안 쓰기(draft) → 검토하기(review) → 고쳐 쓰기(revise). 단계마다 따로 불러 화면에 진행을 보여 줘요.
+  const step = input?.step === "review" || input?.step === "revise" ? input.step : "draft";
+  const draft = typeof input?.draft === "string" ? input.draft.trim().slice(0, 20000) : "";
+  if (step !== "draft" && !draft) {
+    return Response.json({ error: "검토할 초안이 없어요." }, { status: 400 });
+  }
+
   try {
-    const content = await writeDraft({
+    const clean: DraftInput = {
       memo,
       title: String(input?.title ?? "").slice(0, 100),
       recordedAt: String(input?.recordedAt ?? "").slice(0, 40),
@@ -34,8 +41,17 @@ export async function POST(request: Request) {
       tags: Array.isArray(input?.tags) ? input.tags.slice(0, 10).map((t) => String(t).slice(0, 20)) : [],
       length: input?.length === "short" ? "short" : "normal",
       rewrite: parseRewrite(input?.rewrite),
-    });
-    return Response.json({ content });
+      draft,
+    };
+    if (step === "review") {
+      return Response.json({ issues: await reviewDraft(clean) });
+    }
+    if (step === "revise") {
+      const issues = Array.isArray(input?.issues) ? validIssues(input.issues, splitParagraphs(draft).length) : [];
+      if (issues.length === 0) return Response.json({ content: draft });
+      return Response.json({ content: await reviseDraft({ ...clean, issues }) });
+    }
+    return Response.json({ content: await writeDraft(clean) });
   } catch (err) {
     if (err instanceof DraftError) {
       return Response.json({ error: err.message }, { status: err.status });

@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { auth } from "@/lib/firebase";
 import {
+  ISSUE_TYPES,
   MAX_MEMO_LENGTH,
   SHORT_MEMO_LENGTH,
   splitParagraphs,
   type DraftInput,
+  type DraftStep,
+  type ReviewIssue,
 } from "@/lib/draft-input";
 
 /** AI에 메모와 함께 보내는 정보. 미리보기 위에 칩으로 보여 주고 빼고 다시 쓸 수 있어요. (G11) */
@@ -23,11 +26,24 @@ function infoChips(input: DraftInput): { key: InfoKey; label: string }[] {
   return chips;
 }
 
+/** 평가자-최적화자 단계. 진행 중인 단계를 화면에 보여 줘요. */
+const STEPS: { step: DraftStep; label: string }[] = [
+  { step: "draft", label: "초안 쓰기" },
+  { step: "review", label: "검토하기" },
+  { step: "revise", label: "고쳐 쓰기" },
+];
+
+/** 검토 결과. issues가 null이면 검토를 하지 않았거나 실패한 거예요. */
+type ReviewResult = { firstDraft: string; issues: ReviewIssue[] | null; failed: boolean };
+
 /** 짧은 메모일 때 먼저 묻는 질문 (G10) */
 const QUESTIONS = ["누구와 함께였나요?", "기억에 남는 장면은?", "그때 어떤 기분이었나요?"];
 
 /** 내용 칸의 메모를 AI가 블로그 글로 완성해 주고, 미리보기 후 적용해요. */
-export default function AiDraft({ input, onApply }: {
+export default function AiDraft({
+  input,
+  onApply,
+}: {
   input: DraftInput;
   /** 내용 칸을 이 글로 바꿔요. 적용과 되돌리기 모두 이걸 써요. */
   onApply: (content: string) => void;
@@ -46,6 +62,11 @@ export default function AiDraft({ input, onApply }: {
   const [used, setUsed] = useState<DraftInput | null>(null);
   // G9: 적용 전 메모와 적용한 글
   const [backup, setBackup] = useState<{ memo: string; applied: string } | null>(null);
+  // 평가자-최적화자: 검토를 거칠지, 지금 단계, 검토 결과, 초안 보기
+  const [reviewOn, setReviewOn] = useState(true);
+  const [progress, setProgress] = useState<DraftStep | null>(null);
+  const [result, setResult] = useState<ReviewResult | null>(null);
+  const [showFirst, setShowFirst] = useState(false);
 
   const busy = loading || rewriting !== null;
 
@@ -63,7 +84,7 @@ export default function AiDraft({ input, onApply }: {
     return req;
   }
 
-  async function callApi(req: DraftInput): Promise<string> {
+  async function callApi(req: DraftInput): Promise<{ content?: string; issues?: ReviewIssue[] }> {
     const token = await auth.currentUser?.getIdToken();
     const res = await fetch("/api/draft", {
       method: "POST",
@@ -72,7 +93,7 @@ export default function AiDraft({ input, onApply }: {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "AI가 글을 쓰지 못했어요.");
-    return data.content;
+    return data;
   }
 
   async function generate(opts: { excluded?: InfoKey[]; length?: DraftInput["length"]; skipAsk?: boolean } = {}) {
@@ -93,13 +114,36 @@ export default function AiDraft({ input, onApply }: {
     const req = buildRequest(opts.excluded, opts.length);
     setLoading(true);
     setError("");
+    setShowFirst(false);
     try {
-      setDraft(await callApi(req));
+      setProgress("draft");
+      const first = (await callApi({ ...req, step: "draft" })).content ?? "";
+      let final = first;
+      let issues: ReviewIssue[] | null = null;
+      let failed = false;
+      if (reviewOn) {
+        // 검토나 고쳐 쓰기가 실패해도 초안은 살려서 보여 줘요.
+        try {
+          setProgress("review");
+          issues = (await callApi({ ...req, step: "review", draft: first })).issues ?? [];
+          if (issues.length > 0) {
+            setProgress("revise");
+            final = (await callApi({ ...req, step: "revise", draft: first, issues })).content ?? first;
+          }
+        } catch (err) {
+          console.error(err);
+          failed = true;
+          final = first;
+        }
+      }
+      setDraft(final);
+      setResult({ firstDraft: first, issues, failed });
       setUsed(req);
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI가 글을 쓰지 못했어요.");
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
 
@@ -123,8 +167,8 @@ export default function AiDraft({ input, onApply }: {
     setRewriting(index);
     setError("");
     try {
-      const content = await callApi({ ...buildRequest(), rewrite: { paragraphs, index } });
-      paragraphs[index] = content.trim();
+      const { content = "" } = await callApi({ ...buildRequest(), rewrite: { paragraphs, index } });
+      paragraphs[index] = content.trim() || paragraphs[index];
       setDraft(paragraphs.join("\n\n"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI가 문단을 다시 쓰지 못했어요.");
@@ -136,6 +180,8 @@ export default function AiDraft({ input, onApply }: {
   function reset() {
     setDraft("");
     setUsed(null);
+    setResult(null);
+    setShowFirst(false);
     setAsking(false);
     setAnswers(["", "", ""]);
     setClarified(false);
@@ -143,8 +189,8 @@ export default function AiDraft({ input, onApply }: {
   }
 
   function apply() {
-    setBackup({ memo: input.memo, applied: draft });
-    onApply(draft);
+    setBackup({ memo: input.memo, applied: shown });
+    onApply(shown);
     reset();
   }
 
@@ -155,7 +201,10 @@ export default function AiDraft({ input, onApply }: {
     setBackup(null);
   }
 
-  const paragraphs = splitParagraphs(draft);
+  // 초안 보기 중이면 검토 전 초안을, 아니면 최종 글을 보여 주고 적용해요.
+  const shown = showFirst && result ? result.firstDraft : draft;
+  const paragraphs = splitParagraphs(shown);
+  const issueCount = result?.issues?.length ?? 0;
   const allChips = used ? infoChips({ ...input, ...used }) : [];
 
   return (
@@ -167,12 +216,54 @@ export default function AiDraft({ input, onApply }: {
           disabled={busy}
           className="rounded-full border border-accent px-4 py-1.5 text-sm text-accent hover:bg-accent-soft disabled:opacity-50"
         >
-          {loading ? "✨ AI가 쓰는 중… (최대 1분)" : draft ? "✨ 전체 다시 쓰기" : "✨ AI로 글 완성하기"}
+          {loading
+            ? `✨ AI가 쓰는 중… (최대 ${reviewOn ? 3 : 1}분)`
+            : draft
+              ? "✨ 전체 다시 쓰기"
+              : "✨ AI로 글 완성하기"}
         </button>
+        <label className="flex items-center gap-1 text-xs text-ink-soft">
+          <input
+            type="checkbox"
+            checked={reviewOn}
+            onChange={(e) => setReviewOn(e.target.checked)}
+            disabled={busy}
+            className="accent-accent"
+          />
+          AI 검토 거치기 (더 느려요)
+        </label>
         {!draft && !busy && !asking && (
-          <span className="text-xs text-ink-soft">내용 칸에 짧은 메모를 적고 누르면 블로그 글로 풀어 써 줘요.</span>
+          <span className="w-full text-xs text-ink-soft">
+            내용 칸에 짧은 메모를 적고 누르면 블로그 글로 풀어 써 줘요.
+            {reviewOn && " 다른 AI가 초안을 검토하고, 지적한 곳을 고쳐 써요."}
+          </span>
         )}
       </div>
+
+      {progress && reviewOn && (
+        <ol className="flex flex-wrap items-center gap-2 text-xs" aria-label="AI 글쓰기 진행 단계">
+          {STEPS.map(({ step, label }, i) => {
+            const current = STEPS.findIndex((s) => s.step === progress);
+            const state = i < current ? "done" : i === current ? "now" : "todo";
+            return (
+              <li
+                key={step}
+                aria-current={state === "now" ? "step" : undefined}
+                className={`rounded-full px-2 py-0.5 ${
+                  state === "now"
+                    ? "bg-accent text-white"
+                    : state === "done"
+                      ? "bg-accent-soft text-accent"
+                      : "text-ink-soft"
+                }`}
+              >
+                {state === "done" ? "✓" : `${i + 1}`} {label}
+                {state === "now" && "…"}
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       {backup && !draft && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm">
@@ -208,7 +299,11 @@ export default function AiDraft({ input, onApply }: {
             </label>
           ))}
           <div className="flex flex-wrap justify-end gap-2 text-sm">
-            <button type="button" onClick={() => setAsking(false)} className="rounded-full px-3 py-1.5 text-ink-soft hover:text-ink">
+            <button
+              type="button"
+              onClick={() => setAsking(false)}
+              className="rounded-full px-3 py-1.5 text-ink-soft hover:text-ink"
+            >
               취소
             </button>
             <button
@@ -258,21 +353,69 @@ export default function AiDraft({ input, onApply }: {
               </div>
             </div>
           )}
+          {result && (result.issues || result.failed) && (
+            <div className="mb-3 rounded-lg bg-card p-3 text-xs">
+              {result.failed ? (
+                <p className="text-ink-soft">검토 단계에서 문제가 생겨 첫 초안을 그대로 보여 드려요.</p>
+              ) : issueCount === 0 ? (
+                <p className="text-ink-soft">✓ 검토 AI가 지어낸 내용이나 지루한 문단을 찾지 못해서 초안 그대로예요.</p>
+              ) : (
+                <details>
+                  <summary className="cursor-pointer text-accent">
+                    검토 의견 {issueCount}개를 반영해 고쳐 썼어요
+                  </summary>
+                  <ul className="mt-2 space-y-2">
+                    {result.issues!.map((it, i) => (
+                      <li key={i}>
+                        <span className="font-medium">
+                          {it.paragraph}번 문단 · {ISSUE_TYPES[it.type]}
+                        </span>
+                        {it.quote && <span className="text-ink-soft"> “{it.quote}”</span>}
+                        <br />
+                        {it.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {issueCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFirst(!showFirst)}
+                  className="mt-2 rounded-full border border-line px-2 py-0.5 hover:border-accent"
+                >
+                  {showFirst ? "고친 글 보기" : "검토 전 초안과 비교"}
+                </button>
+              )}
+            </div>
+          )}
+          {showFirst && (
+            <p className="mb-2 text-xs font-medium text-ink">검토 전 초안 · 표시한 문단이 검토 의견을 받은 곳이에요</p>
+          )}
           <p className="mb-2 text-xs text-accent">
             AI 미리보기 · 적용하면 내용 칸이 이 글로 바뀌어요 (적용 뒤에도 메모로 되돌릴 수 있어요)
           </p>
           <div className="max-h-96 space-y-3 overflow-y-auto text-sm leading-7">
             {paragraphs.map((p, i) => (
-              <div key={i} className="group">
+              <div
+                key={i}
+                className={
+                  showFirst && result?.issues?.some((it) => it.paragraph === i + 1)
+                    ? "border-l-2 border-accent pl-2"
+                    : ""
+                }
+              >
                 <p className={`whitespace-pre-line ${rewriting === i ? "opacity-40" : ""}`}>{p}</p>
-                <button
-                  type="button"
-                  onClick={() => rewriteParagraph(i)}
-                  disabled={busy}
-                  className="text-xs text-ink-soft hover:text-accent disabled:opacity-50"
-                >
-                  {rewriting === i ? "이 문단 다시 쓰는 중…" : "↻ 이 문단만 다시 쓰기"}
-                </button>
+                {!showFirst && (
+                  <button
+                    type="button"
+                    onClick={() => rewriteParagraph(i)}
+                    disabled={busy}
+                    className="text-xs text-ink-soft hover:text-accent disabled:opacity-50"
+                  >
+                    {rewriting === i ? "이 문단 다시 쓰는 중…" : "↻ 이 문단만 다시 쓰기"}
+                  </button>
+                )}
               </div>
             ))}
           </div>

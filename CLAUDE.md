@@ -38,6 +38,7 @@
 - 요금이 나가는 기능이라 API는 주인 로그인 토큰이 없으면 401로 거절해요.
 - 토큰 검증은 `jose`로 직접 해요. `firebase-admin`은 Vercel에서 `ERR_REQUIRE_ESM`(jwks-rsa → jose) 오류로 로드되지 않아서 뺐어요.
 - 프롬프트(말투, 분량)는 `src/lib/draft.ts`의 `systemPrompt`에서 고쳐요. 문단 하나만 다시 쓰기 지시는 `buildUserMessage`에 있어요.
+- 평가자-최적화자 패턴: 브라우저가 `/api/draft`를 `step`을 바꿔 최대 3번 불러요. `draft`(초안) → `review`(검토 AI가 지어낸 내용·지루한 문단을 JSON으로 지적, `REVIEW_PROMPT`) → `revise`(지적한 곳만 고쳐 쓰기, `REVISE_PROMPT`). 반복은 한 번만 해요(멈춤 조건). 검토 의견이 없으면 고쳐 쓰기를 건너뛰고, 검토가 실패하면 초안을 그대로 보여 줘요. 글쓰기 화면의 "AI 검토 거치기"를 끄면 초안만 써요.
 
 ## 바꿀 때 주의할 점
 
