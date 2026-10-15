@@ -1,5 +1,5 @@
 import { DraftError, writeDraft } from "@/lib/draft";
-import { MAX_MEMO_LENGTH, type DraftInput } from "@/lib/draft-input";
+import { MAX_MEMO_LENGTH, MAX_PARAGRAPHS, type DraftInput } from "@/lib/draft-input";
 import { isOwnerRequest } from "@/lib/verify-owner";
 
 // 글 생성이 수십 초 걸릴 수 있어요.
@@ -32,6 +32,8 @@ export async function POST(request: Request) {
       weather: String(input?.weather ?? "").slice(0, 20),
       place: String(input?.place ?? "").slice(0, 100),
       tags: Array.isArray(input?.tags) ? input.tags.slice(0, 10).map((t) => String(t).slice(0, 20)) : [],
+      length: input?.length === "short" ? "short" : "normal",
+      rewrite: parseRewrite(input?.rewrite),
     });
     return Response.json({ content });
   } catch (err) {
@@ -41,4 +43,13 @@ export async function POST(request: Request) {
     console.error(err);
     return Response.json({ error: "AI가 글을 쓰지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 502 });
   }
+}
+
+/** 문단 하나만 다시 쓰기 요청을 검사해요. 형식이 맞지 않으면 글 전체를 써요. */
+function parseRewrite(value: unknown): DraftInput["rewrite"] {
+  if (!value || typeof value !== "object") return undefined;
+  const { paragraphs, index } = value as { paragraphs?: unknown; index?: unknown };
+  if (!Array.isArray(paragraphs) || paragraphs.length === 0 || paragraphs.length > MAX_PARAGRAPHS) return undefined;
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= paragraphs.length) return undefined;
+  return { paragraphs: paragraphs.map((p) => String(p).slice(0, MAX_MEMO_LENGTH)), index };
 }

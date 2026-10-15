@@ -4,14 +4,18 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Vercel 환경변수 OPENROUTER_MODEL로 바꿀 수 있어요. (모델 목록: https://openrouter.ai/models)
 const DEFAULT_MODEL = "anthropic/claude-sonnet-5.5";
 
-const SYSTEM_PROMPT = `너는 개인 일상 블로그 "하루기록"의 글쓰기 도우미야.
+function systemPrompt(length: DraftInput["length"]) {
+  const amount = length === "short" ? "1~2개 문단 정도로 짧게" : "3~6개 문단 정도";
+  return `너는 개인 일상 블로그 "하루기록"의 글쓰기 도우미야.
 사용자가 남긴 짧은 메모를 바탕으로, 그 사람이 직접 쓴 것 같은 1인칭 일상 블로그 본문을 한국어로 써 줘.
 
 - 메모에 있는 일, 감정, 분위기를 살려 자연스럽게 풀어 써. 메모에 없는 사람, 장소, 사건은 지어내지 마.
-- 날짜, 기분, 날씨, 장소 정보가 있으면 어울리게 녹여 써.
-- 따뜻하고 편안한 일기 말투로, 3~6개 문단 정도.
+- 날짜, 기분, 날씨, 장소 정보가 있으면 어울리게 녹여 써. 주어지지 않은 정보는 추측해서 넣지 마.
+- 따뜻하고 편안한 일기 말투로, ${amount}. 메모가 짧으면 분량을 채우려고 내용을 늘리지 마.
+- 문단 사이는 빈 줄 하나로 나눠.
 - 마크다운 기호(#, *, - 등) 없이 문단과 줄바꿈만 써.
 - 본문만 출력해. 제목, 인사말, 설명은 붙이지 마.`;
+}
 
 function buildUserMessage(input: DraftInput) {
   const lines = [
@@ -22,7 +26,19 @@ function buildUserMessage(input: DraftInput) {
     input.place && `장소: ${input.place}`,
     input.tags?.length && `태그: ${input.tags.join(", ")}`,
   ].filter(Boolean);
-  return `${lines.join("\n")}\n\n메모:\n${input.memo}`;
+  const base = `${lines.join("\n")}\n\n메모:\n${input.memo}`;
+  if (!input.rewrite) return base;
+
+  // 문단 하나만 다시 쓰기 (G9)
+  const { paragraphs, index } = input.rewrite;
+  const numbered = paragraphs.map((p, i) => `[${i + 1}] ${p}`).join("\n\n");
+  return `${base}
+
+지금 쓴 글:
+${numbered}
+
+위 글의 [${index + 1}]번 문단만 새로 써 줘. 앞뒤 문단과 자연스럽게 이어지고, 다른 문단의 내용을 되풀이하지 마.
+번호 없이 새 문단 하나만 출력해.`;
 }
 
 /** 사용자에게 보여 줄 메시지와 HTTP 상태를 담은 오류 */
@@ -51,7 +67,7 @@ export async function writeDraft(input: DraftInput): Promise<string> {
       model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
       max_tokens: 16000,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt(input.length) },
         { role: "user", content: buildUserMessage(input) },
       ],
     }),
